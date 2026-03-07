@@ -1,0 +1,387 @@
+```html
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CapsoTime Radar - V6.0 Seuils CCN 51</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; color: #1e293b; }
+        .range-slider { -webkit-appearance: none; width: 100%; background: transparent; height: 24px; cursor: pointer; }
+        .range-slider::-webkit-slider-runnable-track { width: 100%; height: 6px; background: #e2e8f0; border-radius: 4px; box-shadow: inset 0 1px 2px rgba(0,0,0,0.05); }
+        .range-slider::-webkit-slider-thumb { -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%; background: #4f46e5; margin-top: -7px; border: 4px solid white; box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3); transition: transform 0.15s ease; }
+        .range-slider::-webkit-slider-thumb:hover { transform: scale(1.15); }
+        .fade-in { animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .grid-7 { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+        .grid-14 { display: grid; grid-template-columns: repeat(14, 1fr); gap: 2px; }
+        .glass-header { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(8px); border-bottom: 1px solid rgba(226, 232, 240, 0.8); }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useEffect } = React;
+
+        const DEFAULT_CONFIG = {
+            RATE: 12.79, 
+            CHARGES: 1.42,
+            LIMITS_7J: { ORANGE: 39, RED: 43 },
+            LIMITS_14J: { ORANGE: 78, RED: 85 }
+        };
+
+        const LABELS_7J = ['LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM', 'DIM'];
+        const LABELS_14J = ['L1', 'M1', 'M1', 'J1', 'V1', 'S1', 'D1', 'L2', 'M2', 'M2', 'J2', 'V2', 'S2', 'D2'];
+
+        const MOCK_DATA = [
+            { id: 1, name: "Dupont Marie", schedule: [8,8,8,8,3,0,0, 8,8,8,8,3,0,0] },
+            { id: 2, name: "Martin Jean", schedule: [10,10,10,5,0,0,0, 10,10,10,10,0,0,0] },
+            { id: 3, name: "Bernard Sophie", schedule: [7,7,7,7,7,0,0, 7,7,7,7,7,0,0] },
+            { id: 4, name: "Petit Thomas", schedule: [12,12,12,12,6,0,0, 0,0,0,0,0,0,0] }, 
+            { id: 5, name: "Dubois Lucas", schedule: [9,9,9,9,9,0,0, 9,9,9,9,9,0,0] }
+        ].map(a => ({ ...a, tactical: [...a.schedule] }));
+
+        // --- MOTEUR (V6.0 - Seuils CCN 51 : 78h/85h pour 14J, 39h/43h pour 7J) ---
+        const Utils = {
+            fmtHours: (dec) => {
+                const h = Math.floor(dec);
+                const m = Math.round((dec - h) * 60);
+                return `${h}h${m.toString().padStart(2, '0')}`;
+            },
+            
+            calcWeekCost: (hours, config) => {
+                let h25 = 0, h50 = 0;
+                if (hours > 35) {
+                    if (hours > 43) { h25 = 8; h50 = hours - 43; } 
+                    else { h25 = hours - 35; }
+                }
+                return { h25, h50, cost: ((h25 * 1.25) + (h50 * 1.50)) * config.RATE * config.CHARGES };
+            },
+
+            analyze: (schedule, viewMode, config) => {
+                const limits = viewMode === '7J' ? config.LIMITS_7J : config.LIMITS_14J;
+                const checkStatus = (h) => {
+                    if (h > limits.RED) return 'RED';
+                    if (h >= limits.ORANGE) return 'ORANGE';
+                    return 'GREEN';
+                };
+
+                let cost = 0, h25 = 0, h50 = 0, total = 0, status = 'GREEN';
+
+                if (viewMode === '7J') {
+                    total = schedule.slice(0, 7).reduce((a, b) => a + b, 0);
+                    const res = Utils.calcWeekCost(total, config);
+                    cost = res.cost; h25 = res.h25; h50 = res.h50;
+                    status = checkStatus(total);
+                } else {
+                    const w1 = schedule.slice(0, 7).reduce((a, b) => a + b, 0);
+                    const w2 = schedule.slice(7, 14).reduce((a, b) => a + b, 0);
+                    total = w1 + w2;
+                    
+                    const lissageOK = w1 <= 48 && w2 <= 48; // Règle stricte
+
+                    if (lissageOK) {
+                        if (total > 78) {
+                            const hs = total - 78;
+                            h25 = Math.min(hs, 7);
+                            h50 = Math.max(0, hs - 7);
+                            cost = ((h25 * 1.25) + (h50 * 1.50)) * config.RATE * config.CHARGES;
+                        }
+                    } else {
+                        const c1 = Utils.calcWeekCost(w1, config);
+                        const c2 = Utils.calcWeekCost(w2, config);
+                        cost = c1.cost + c2.cost;
+                        h25 = c1.h25 + c2.h25;
+                        h50 = c1.h50 + c2.h50;
+                    }
+                    status = checkStatus(total);
+                }
+                return { total, cost, h25, h50, status };
+            },
+
+            parseCSV: (text) => {
+                const lines = text.split(/\r?\n/).filter(l => l.trim());
+                if (!lines.length) return [];
+
+                // DÉTECTION : Cherche un format date "JJ/MM/AAAA" pour identifier le mode "Liste Excel"
+                const isListFormat = lines.some(l => /\d{2}\/\d{2}\/\d{4}/.test(l));
+
+                if (isListFormat) {
+                    // --- NOUVEAU PARSEUR (Liste Verticale) ---
+                    const entryMap = new Map(); // Key: Nom, Value: Array(14)
+                    let minTime = Infinity;
+                    const rawEntries = [];
+
+                    // 1. Extraction des données brutes
+                    lines.forEach(line => {
+                        // Regex : (Nom Prénom) (Espace/Tab) (JJ/MM/AAAA) (Espace/Tab) (HH:MM)
+                        const match = line.match(/^(.+?)\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{2}:\d{2})/);
+                        if (match) {
+                            const name = match[1].trim().replace(/\t/g, ' '); 
+                            const dateStr = match[2];
+                            const timeStr = match[3];
+
+                            // Conversion Date
+                            const [dd, mm, yyyy] = dateStr.split('/').map(Number);
+                            const dateObj = new Date(yyyy, mm - 1, dd);
+                            const time = dateObj.getTime();
+                            if (time < minTime) minTime = time;
+
+                            // Conversion Heure (HH:MM -> Décimal)
+                            const [h, m] = timeStr.split(':').map(Number);
+                            const decimal = h + (m / 60);
+
+                            rawEntries.push({ name, time, decimal });
+                        }
+                    });
+
+                    if (minTime === Infinity) return [];
+
+                    // 2. Agrégation par agent et mapping sur 14 jours
+                    rawEntries.forEach(e => {
+                        if (!entryMap.has(e.name)) {
+                            entryMap.set(e.name, Array(14).fill(0));
+                        }
+                        // Calcul de l'index jour (0 à 13) par rapport à la date min trouvée
+                        const dayDiff = Math.floor((e.time - minTime) / (1000 * 60 * 60 * 24));
+                        
+                        if (dayDiff >= 0 && dayDiff < 14) {
+                            const arr = entryMap.get(e.name);
+                            arr[dayDiff] += e.decimal; // Somme si plusieurs pointages/jour
+                        }
+                    });
+
+                    // 3. Transformation finale
+                    return Array.from(entryMap.entries()).map(([name, schedule], idx) => ({
+                        id: `imp-list-${idx}`, name, schedule, tactical: [...schedule]
+                    }));
+
+                } else {
+                    // --- ANCIEN PARSEUR (Ligne par agent) ---
+                    return lines.map((line, idx) => {
+                        let p = line.split(/[\t;,]/).map(s => s.trim()).filter(s => s !== "");
+                        if (p.length < 8) return null;
+                        const name = p[0];
+                        const s = p.slice(1).map(v => parseFloat(v.replace(',', '.')) || 0);
+                        const full = Array(14).fill(0).map((_, i) => s[i] || 0);
+                        return { id: `imp-${idx}`, name, schedule: full, tactical: [...full] };
+                    }).filter(x => x);
+                }
+            }
+        };
+
+        const Icons = {
+            Upload: () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>,
+            Trash: () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>,
+            Clock: () => <svg className="w-5 h-5 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+            Alert: () => <svg className="w-5 h-5 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>,
+            Money: () => <svg className="w-5 h-5 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        };
+
+        const AgentCard = ({ agent, pivot, viewMode, config, onEdit }) => {
+            const days = viewMode === '7J' ? 7 : 14;
+            const final = agent.schedule.map((v, i) => i <= pivot ? v : agent.tactical[i]);
+            const stats = Utils.analyze(final, viewMode, config);
+
+            const designs = {
+                GREEN: { border: 'border-slate-200', bg: 'bg-white', title: 'text-slate-700', badge: 'bg-green-500 text-white shadow-md', bar: 'bg-emerald-500', totalColor: 'text-green-500' },
+                ORANGE: { border: 'border-orange-200', bg: 'bg-orange-50/30', title: 'text-orange-900', badge: 'bg-orange-500 text-white shadow-md', bar: 'bg-orange-400', totalColor: 'text-orange-500' },
+                RED: { border: 'border-rose-200', bg: 'bg-rose-50/30', title: 'text-rose-900', badge: 'bg-red-500 text-white shadow-md', bar: 'bg-rose-500', totalColor: 'text-red-500' }
+            }[stats.status];
+
+            const statusLabel = { GREEN: 'VERT', ORANGE: 'ORANGE', RED: 'ROUGE' }[stats.status];
+
+            return (
+                <div className={`p-4 rounded-xl border mb-3 flex flex-col lg:flex-row items-center gap-4 transition-all hover:shadow-lg ${designs.border} ${designs.bg}`}>
+                    <div className="w-full lg:w-48 flex items-center gap-3">
+                        <div className={`w-1.5 h-12 rounded-full ${designs.bar}`}></div>
+                        <div className="flex-1 min-w-0">
+                            <h3 className={`font-bold text-sm truncate ${designs.title}`}>{agent.name}</h3>
+                            <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${designs.badge}`}>{statusLabel}</span>
+                        </div>
+                    </div>
+                    <div className={`flex-1 w-full ${viewMode === '7J' ? 'grid-7' : 'grid-14'}`}>
+                        {Array.from({length: days}).map((_, idx) => {
+                            const val = final[idx];
+                            const isPast = idx <= pivot;
+                            let cellClass = "h-10 rounded-md flex flex-col items-center justify-center font-bold text-xs transition-all ";
+                            
+                            if (isPast) cellClass += val === 0 ? "bg-slate-100 text-slate-300" : "bg-slate-800 text-white shadow-sm";
+                            else cellClass += val === 0 ? "bg-white border border-dashed border-slate-300 text-slate-300 hover:border-slate-400 cursor-pointer" : "bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-100 hover:scale-105 cursor-pointer";
+
+                            return (
+                                <div key={idx} onClick={() => !isPast && onEdit(agent.id, idx)} className={cellClass} title={`${isPast ? "Figé" : "Modifier"} - ${Utils.fmtHours(val)}`}>
+                                    <span>{val === 0 ? '-' : Utils.fmtHours(val)}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                    <div className="w-full lg:w-28 text-right flex flex-row lg:flex-col justify-between items-center lg:items-end">
+                        <div className={`lg:hidden text-xs font-bold uppercase opacity-50 ${designs.title}`}>Total</div>
+                        <div>
+                            <div className={`text-2xl font-black leading-none ${designs.totalColor}`}>{Utils.fmtHours(stats.total)}</div>
+                            {stats.cost > 0 && <div className="text-xs font-bold text-rose-500 mt-1">+{Math.round(stats.cost)} €</div>}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [config, setConfig] = useState(DEFAULT_CONFIG);
+            const [agents, setAgents] = useState(MOCK_DATA);
+            const [viewMode, setViewMode] = useState('14J');
+            const [pivot, setPivot] = useState(4); 
+            const [filter, setFilter] = useState('ALL');
+            const [modal, setModal] = useState(null);
+            const [pasteText, setPasteText] = useState("");
+
+            useEffect(() => { if (viewMode === '7J' && pivot > 6) setPivot(6); }, [viewMode]);
+
+            const handleEdit = (id, dayIdx) => {
+                setAgents(prev => prev.map(a => {
+                    if (a.id !== id) return a;
+                    const choices = [0, 5, 6, 7, 8, 9, 10, 11, 12];
+                    const curr = a.tactical[dayIdx];
+                    const nextIndex = choices.indexOf(curr);
+                    const next = nextIndex === -1 ? 0 : choices[(nextIndex + 1) % choices.length];
+                    const newT = [...a.tactical]; newT[dayIdx] = next;
+                    return { ...a, tactical: newT };
+                }));
+            };
+
+            const handleImport = () => {
+                const d = Utils.parseCSV(pasteText);
+                if (d.length) { setAgents(d); setModal(null); setPasteText(""); }
+                else alert("Erreur format ou données vides");
+            };
+
+            const globalStats = useMemo(() => {
+                let h25=0, h50=0, cost=0, hours=0;
+                agents.forEach(a => {
+                    const f = a.schedule.map((v,i) => i<=pivot ? v : a.tactical[i]);
+                    const r = Utils.analyze(f, viewMode, config);
+                    h25+=r.h25; h50+=r.h50; cost+=r.cost; hours+=r.total;
+                });
+                return { h25, h50, cost, hours };
+            }, [agents, pivot, viewMode, config]);
+
+            const displayAgents = agents
+                .filter(a => {
+                    if (filter === 'ALL') return true;
+                    const f = a.schedule.map((v,i) => i<=pivot ? v : a.tactical[i]);
+                    return Utils.analyze(f, viewMode, config).status === filter;
+                })
+                .sort((a, b) => {
+                    const getTot = (ag) => ag.schedule.slice(0, viewMode==='7J'?7:14).reduce((s,h)=>s+h,0);
+                    return getTot(b) - getTot(a);
+                });
+
+            const labels = viewMode === '7J' ? LABELS_7J : LABELS_14J;
+
+            return (
+                <div className="pb-20">
+                    <div className="glass-header sticky top-0 z-50">
+                        <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-indigo-600 text-white w-8 h-8 rounded-lg flex items-center justify-center font-black">C</div>
+                                <div className="leading-tight">
+                                    <h1 className="text-sm font-black text-slate-900 uppercase tracking-wide">CapsoTime</h1>
+                                    <span className="text-[10px] font-bold text-indigo-600 uppercase">Radar Elite</span>
+                                </div>
+                            </div>
+                            <div className="bg-slate-100 p-1 rounded-lg flex font-bold text-[10px] shadow-inner border border-slate-200">
+                                <button onClick={() => setViewMode('7J')} className={`px-3 py-1.5 rounded-md transition-all ${viewMode==='7J' ? 'bg-white shadow text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}>7 JOURS</button>
+                                <button onClick={() => setViewMode('14J')} className={`px-3 py-1.5 rounded-md transition-all ${viewMode==='14J' ? 'bg-white shadow text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}>14 JOURS</button>
+                            </div>
+                            <div className="flex gap-2">
+                                <button onClick={() => setModal('PASTE')} className="p-2 bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition"><Icons.Upload /></button>
+                                <button onClick={() => setAgents([])} className="p-2 bg-white border border-rose-200 text-rose-500 rounded-lg hover:bg-rose-50 transition"><Icons.Trash /></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="max-w-7xl mx-auto p-4 md:p-8 fade-in">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm relative overflow-hidden group">
+                                <div className="absolute right-2 top-2"><Icons.Clock /></div>
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Volume Total</div>
+                                <div className="text-2xl font-black text-slate-800 tracking-tight">{Utils.fmtHours(globalStats.hours)}</div>
+                            </div>
+                            <div className="bg-orange-50/50 p-4 rounded-2xl border border-orange-100 relative group">
+                                <div className="absolute right-2 top-2"><Icons.Alert /></div>
+                                <div className="text-[10px] font-bold text-orange-600/70 uppercase tracking-widest mb-1">HS 25%</div>
+                                <div className="text-2xl font-black text-orange-600 tracking-tight">{Utils.fmtHours(globalStats.h25)}</div>
+                            </div>
+                            <div className="bg-rose-50/50 p-4 rounded-2xl border border-rose-100 relative group">
+                                <div className="absolute right-2 top-2"><Icons.Alert /></div>
+                                <div className="text-[10px] font-bold text-rose-600/70 uppercase tracking-widest mb-1">HS 50%</div>
+                                <div className="text-2xl font-black text-rose-600 tracking-tight">{Utils.fmtHours(globalStats.h50)}</div>
+                            </div>
+                            <div className="bg-slate-900 p-4 rounded-2xl shadow-xl shadow-indigo-500/10 relative overflow-hidden">
+                                <div className="absolute right-2 top-2 text-white/20"><Icons.Money /></div>
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Surcoût Est.</div>
+                                <div className="text-2xl font-black text-emerald-400 tracking-tight">{Math.round(globalStats.cost).toLocaleString()} €</div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white px-6 py-4 rounded-2xl shadow-sm border border-slate-200 mb-8 relative">
+                            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4 text-center">Pilotage Temporel ({viewMode})</h3>
+                            <input type="range" min="0" max={viewMode==='7J'?6:13} step="1" value={pivot} onChange={(e) => setPivot(Number(e.target.value))} className="range-slider" />
+                            <div className="flex justify-between mt-2 overflow-hidden">
+                                {labels.map((d, i) => (
+                                    <div key={i} className={`flex flex-col items-center transition-all duration-300 ${i===pivot ? 'opacity-100 scale-110' : 'opacity-40 scale-90'}`}>
+                                        <span className={`text-[9px] md:text-[10px] font-bold uppercase ${i===pivot ? 'text-indigo-600' : 'text-slate-500'}`}>{d}</span>
+                                        <div className={`w-1 h-1 rounded-full mt-1 ${i===pivot ? 'bg-indigo-600' : 'bg-transparent'}`}></div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2 mb-4">
+                            {[{k:'ALL', l:'TOUS', c:'bg-white text-slate-600 border-slate-200'}, {k:'GREEN', l:'VERT', c:'bg-emerald-500 text-white border-emerald-600'}, {k:'ORANGE', l:'ORANGE', c:'bg-orange-500 text-white border-orange-600'}, {k:'RED', l:'ROUGE', c:'bg-rose-600 text-white border-rose-700'}].map(f => (
+                                <button key={f.k} onClick={() => setFilter(f.k)} className={`px-4 py-1.5 rounded-full text-[10px] font-bold uppercase transition border ${filter===f.k ? 'ring-2 ring-offset-1 ring-indigo-500 ' + f.c : 'hover:opacity-80 ' + f.c} ${filter===f.k ? 'shadow-sm' : 'opacity-60 grayscale'}`}>{f.l}</button>
+                            ))}
+                        </div>
+
+                        <div className="space-y-1">
+                            {displayAgents.length === 0 && <div className="text-center py-12 text-slate-400 border-2 border-dashed rounded-xl">Aucune donnée</div>}
+                            {displayAgents.map(agent => (
+                                <AgentCard key={agent.id} agent={agent} pivot={pivot} viewMode={viewMode} config={config} onEdit={handleEdit} />
+                            ))}
+                        </div>
+                    </div>
+
+                    {modal === 'PASTE' && (
+                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 fade-in">
+                                <h3 className="font-bold text-lg mb-2">Importer Données</h3>
+                                <p className="text-xs text-slate-500 mb-4">Compatible Liste Verticale (Date/Heure) & Tableau</p>
+                                <textarea className="w-full h-40 border bg-slate-50 rounded-xl p-3 text-xs font-mono focus:ring-2 ring-indigo-500 outline-none" value={pasteText} onChange={e => setPasteText(e.target.value)} placeholder="Copiez votre liste Excel ici..."></textarea>
+                                <div className="flex justify-end gap-2 mt-4">
+                                    <button onClick={() => setModal(null)} className="px-4 py-2 text-slate-600 font-bold text-sm">Annuler</button>
+                                    <button onClick={handleImport} className="px-4 py-2 bg-slate-800 text-white font-bold rounded-lg text-sm">Valider</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
+
+```
