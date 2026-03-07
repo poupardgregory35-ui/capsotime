@@ -12,6 +12,10 @@
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- PDF.js library for PDF parsing in standalone mode -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
 
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; color: #1e293b; }
@@ -265,6 +269,51 @@
                 else alert("Erreur format ou données vides");
             };
 
+            const handleFileUpload = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    let fullText = "";
+                    
+                    for (let i = 1; i <= pdf.numPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const content = await page.getTextContent();
+                        
+                        // Combiner les morceaux de texte par ligne (même coordonnée Y approx)
+                        const items = content.items.sort((a, b) => {
+                            if (Math.abs(b.transform[5] - a.transform[5]) > 5) {
+                                return b.transform[5] - a.transform[5]; // Y descendant (haut en bas)
+                            }
+                            return a.transform[4] - b.transform[4]; // X ascendant (gauche à droite)
+                        });
+
+                        let lastY = null;
+                        let line = "";
+                        items.forEach(item => {
+                            if (lastY !== null && Math.abs(item.transform[5] - lastY) > 5) {
+                                fullText += line + "\n";
+                                line = "";
+                            }
+                            line += item.str + " ";
+                            lastY = item.transform[5];
+                        });
+                        fullText += line + "\n";
+                    }
+                    
+                    // On injecte le texte du PDF dans la zone de collage
+                    setPasteText(prev => prev + (prev ? "\n" : "") + fullText);
+                } catch (err) {
+                    console.error("Erreur PDF:", err);
+                    alert("Erreur lors de la lecture du fichier PDF.");
+                }
+                
+                // Reset input to allow re-upload
+                e.target.value = null;
+            };
+
             const globalStats = useMemo(() => {
                 let h25=0, h50=0, cost=0, hours=0;
                 agents.forEach(a => {
@@ -365,8 +414,20 @@
                         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 fade-in">
                                 <h3 className="font-bold text-lg mb-2">Importer Données</h3>
-                                <p className="text-xs text-slate-500 mb-4">Compatible Liste Verticale (Date/Heure) & Tableau</p>
-                                <textarea className="w-full h-40 border bg-slate-50 rounded-xl p-3 text-xs font-mono focus:ring-2 ring-indigo-500 outline-none" value={pasteText} onChange={e => setPasteText(e.target.value)} placeholder="Copiez votre liste Excel ici..."></textarea>
+                                <p className="text-xs text-slate-500 mb-4">Vous pouvez coller du texte Excel ou importer un fichier PDF.</p>
+                                
+                                <div className="mb-4">
+                                    <label className="block w-full border-2 border-dashed border-slate-300 rounded-xl p-4 text-center cursor-pointer hover:bg-slate-50 hover:border-indigo-400 transition group">
+                                        <div className="flex flex-col items-center gap-2">
+                                            <svg className="w-8 h-8 text-slate-400 group-hover:text-indigo-500 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                            <span className="text-sm font-bold text-slate-600">Importer un fichier PDF</span>
+                                            <span className="text-[10px] text-slate-400">Le texte extrait s'affichera ci-dessous</span>
+                                        </div>
+                                        <input type="file" accept=".pdf" className="hidden" onChange={handleFileUpload} />
+                                    </label>
+                                </div>
+
+                                <textarea className="w-full h-40 border bg-slate-50 rounded-xl p-3 text-xs font-mono focus:ring-2 ring-indigo-500 outline-none" value={pasteText} onChange={e => setPasteText(e.target.value)} placeholder="Ou copiez votre liste Excel ici..."></textarea>
                                 <div className="flex justify-end gap-2 mt-4">
                                     <button onClick={() => setModal(null)} className="px-4 py-2 text-slate-600 font-bold text-sm">Annuler</button>
                                     <button onClick={handleImport} className="px-4 py-2 bg-slate-800 text-white font-bold rounded-lg text-sm">Valider</button>
