@@ -1,35 +1,98 @@
-```html
 <!DOCTYPE html>
 <html lang="fr">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CapsoTime Radar - V6.0 Seuils CCN 51</title>
-    
+    <title>CapsoTime - V6.0 Seuils CCN 51</title>
+
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
+
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
+
     <!-- PDF.js library for PDF parsing in standalone mode -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
 
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; color: #1e293b; }
-        .range-slider { -webkit-appearance: none; width: 100%; background: transparent; height: 24px; cursor: pointer; }
-        .range-slider::-webkit-slider-runnable-track { width: 100%; height: 6px; background: #e2e8f0; border-radius: 4px; box-shadow: inset 0 1px 2px rgba(0,0,0,0.05); }
-        .range-slider::-webkit-slider-thumb { -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%; background: #4f46e5; margin-top: -7px; border: 4px solid white; box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3); transition: transform 0.15s ease; }
-        .range-slider::-webkit-slider-thumb:hover { transform: scale(1.15); }
-        .fade-in { animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .grid-7 { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
-        .grid-14 { display: grid; grid-template-columns: repeat(14, 1fr); gap: 2px; }
-        .glass-header { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(8px); border-bottom: 1px solid rgba(226, 232, 240, 0.8); }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f1f5f9;
+            color: #1e293b;
+        }
+
+        .range-slider {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+            height: 24px;
+            cursor: pointer;
+        }
+
+        .range-slider::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            background: #e2e8f0;
+            border-radius: 4px;
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+
+        .range-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #4f46e5;
+            margin-top: -7px;
+            border: 4px solid white;
+            box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3);
+            transition: transform 0.15s ease;
+        }
+
+        .range-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .grid-7 {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
+        }
+
+        .grid-14 {
+            display: grid;
+            grid-template-columns: repeat(14, 1fr);
+            gap: 2px;
+        }
+
+        .glass-header {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+        }
     </style>
 </head>
+
 <body>
     <div id="root"></div>
 
@@ -37,7 +100,7 @@
         const { useState, useMemo, useEffect } = React;
 
         const DEFAULT_CONFIG = {
-            RATE: 12.79, 
+            RATE: 12.79,
             CHARGES: 1.42,
             LIMITS_7J: { ORANGE: 39, RED: 43 },
             LIMITS_14J: { ORANGE: 78, RED: 85 }
@@ -47,11 +110,11 @@
         const LABELS_14J = ['L1', 'M1', 'M1', 'J1', 'V1', 'S1', 'D1', 'L2', 'M2', 'M2', 'J2', 'V2', 'S2', 'D2'];
 
         const MOCK_DATA = [
-            { id: 1, name: "Dupont Marie", schedule: [8,8,8,8,3,0,0, 8,8,8,8,3,0,0] },
-            { id: 2, name: "Martin Jean", schedule: [10,10,10,5,0,0,0, 10,10,10,10,0,0,0] },
-            { id: 3, name: "Bernard Sophie", schedule: [7,7,7,7,7,0,0, 7,7,7,7,7,0,0] },
-            { id: 4, name: "Petit Thomas", schedule: [12,12,12,12,6,0,0, 0,0,0,0,0,0,0] }, 
-            { id: 5, name: "Dubois Lucas", schedule: [9,9,9,9,9,0,0, 9,9,9,9,9,0,0] }
+            { id: 1, name: "Dupont Marie", schedule: [8, 8, 8, 8, 3, 0, 0, 8, 8, 8, 8, 3, 0, 0] },
+            { id: 2, name: "Martin Jean", schedule: [10, 10, 10, 5, 0, 0, 0, 10, 10, 10, 10, 0, 0, 0] },
+            { id: 3, name: "Bernard Sophie", schedule: [7, 7, 7, 7, 7, 0, 0, 7, 7, 7, 7, 7, 0, 0] },
+            { id: 4, name: "Petit Thomas", schedule: [12, 12, 12, 12, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+            { id: 5, name: "Dubois Lucas", schedule: [9, 9, 9, 9, 9, 0, 0, 9, 9, 9, 9, 9, 0, 0] }
         ].map(a => ({ ...a, tactical: [...a.schedule] }));
 
         // --- MOTEUR (V6.0 - Seuils CCN 51 : 78h/85h pour 14J, 39h/43h pour 7J) ---
@@ -61,11 +124,11 @@
                 const m = Math.round((dec - h) * 60);
                 return `${h}h${m.toString().padStart(2, '0')}`;
             },
-            
+
             calcWeekCost: (hours, config) => {
                 let h25 = 0, h50 = 0;
                 if (hours > 35) {
-                    if (hours > 43) { h25 = 8; h50 = hours - 43; } 
+                    if (hours > 43) { h25 = 8; h50 = hours - 43; }
                     else { h25 = hours - 35; }
                 }
                 return { h25, h50, cost: ((h25 * 1.25) + (h50 * 1.50)) * config.RATE * config.CHARGES };
@@ -90,7 +153,7 @@
                     const w1 = schedule.slice(0, 7).reduce((a, b) => a + b, 0);
                     const w2 = schedule.slice(7, 14).reduce((a, b) => a + b, 0);
                     total = w1 + w2;
-                    
+
                     const lissageOK = w1 <= 48 && w2 <= 48; // Règle stricte
 
                     if (lissageOK) {
@@ -130,7 +193,7 @@
                         // Regex : (Nom Prénom) (Espace/Tab) (JJ/MM/AAAA) (Espace/Tab) (HH:MM)
                         const match = line.match(/^(.+?)\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{2}:\d{2})/);
                         if (match) {
-                            const name = match[1].trim().replace(/\t/g, ' '); 
+                            const name = match[1].trim().replace(/\t/g, ' ');
                             const dateStr = match[2];
                             const timeStr = match[3];
 
@@ -157,7 +220,7 @@
                         }
                         // Calcul de l'index jour (0 à 13) par rapport à la date min trouvée
                         const dayDiff = Math.floor((e.time - minTime) / (1000 * 60 * 60 * 24));
-                        
+
                         if (dayDiff >= 0 && dayDiff < 14) {
                             const arr = entryMap.get(e.name);
                             arr[dayDiff] += e.decimal; // Somme si plusieurs pointages/jour
@@ -214,11 +277,11 @@
                         </div>
                     </div>
                     <div className={`flex-1 w-full ${viewMode === '7J' ? 'grid-7' : 'grid-14'}`}>
-                        {Array.from({length: days}).map((_, idx) => {
+                        {Array.from({ length: days }).map((_, idx) => {
                             const val = final[idx];
                             const isPast = idx <= pivot;
                             let cellClass = "h-10 rounded-md flex flex-col items-center justify-center font-bold text-xs transition-all ";
-                            
+
                             if (isPast) cellClass += val === 0 ? "bg-slate-100 text-slate-300" : "bg-slate-800 text-white shadow-sm";
                             else cellClass += val === 0 ? "bg-white border border-dashed border-slate-300 text-slate-300 hover:border-slate-400 cursor-pointer" : "bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-100 hover:scale-105 cursor-pointer";
 
@@ -244,7 +307,7 @@
             const [config, setConfig] = useState(DEFAULT_CONFIG);
             const [agents, setAgents] = useState(MOCK_DATA);
             const [viewMode, setViewMode] = useState('14J');
-            const [pivot, setPivot] = useState(4); 
+            const [pivot, setPivot] = useState(4);
             const [filter, setFilter] = useState('ALL');
             const [modal, setModal] = useState(null);
             const [pasteText, setPasteText] = useState("");
@@ -272,16 +335,16 @@
             const handleFileUpload = async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
-                
+
                 try {
                     const arrayBuffer = await file.arrayBuffer();
                     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
                     let fullText = "";
-                    
+
                     for (let i = 1; i <= pdf.numPages; i++) {
                         const page = await pdf.getPage(i);
                         const content = await page.getTextContent();
-                        
+
                         // Combiner les morceaux de texte par ligne (même coordonnée Y approx)
                         const items = content.items.sort((a, b) => {
                             if (Math.abs(b.transform[5] - a.transform[5]) > 5) {
@@ -302,24 +365,24 @@
                         });
                         fullText += line + "\n";
                     }
-                    
+
                     // On injecte le texte du PDF dans la zone de collage
                     setPasteText(prev => prev + (prev ? "\n" : "") + fullText);
                 } catch (err) {
                     console.error("Erreur PDF:", err);
                     alert("Erreur lors de la lecture du fichier PDF.");
                 }
-                
+
                 // Reset input to allow re-upload
                 e.target.value = null;
             };
 
             const globalStats = useMemo(() => {
-                let h25=0, h50=0, cost=0, hours=0;
+                let h25 = 0, h50 = 0, cost = 0, hours = 0;
                 agents.forEach(a => {
-                    const f = a.schedule.map((v,i) => i<=pivot ? v : a.tactical[i]);
+                    const f = a.schedule.map((v, i) => i <= pivot ? v : a.tactical[i]);
                     const r = Utils.analyze(f, viewMode, config);
-                    h25+=r.h25; h50+=r.h50; cost+=r.cost; hours+=r.total;
+                    h25 += r.h25; h50 += r.h50; cost += r.cost; hours += r.total;
                 });
                 return { h25, h50, cost, hours };
             }, [agents, pivot, viewMode, config]);
@@ -327,11 +390,11 @@
             const displayAgents = agents
                 .filter(a => {
                     if (filter === 'ALL') return true;
-                    const f = a.schedule.map((v,i) => i<=pivot ? v : a.tactical[i]);
+                    const f = a.schedule.map((v, i) => i <= pivot ? v : a.tactical[i]);
                     return Utils.analyze(f, viewMode, config).status === filter;
                 })
                 .sort((a, b) => {
-                    const getTot = (ag) => ag.schedule.slice(0, viewMode==='7J'?7:14).reduce((s,h)=>s+h,0);
+                    const getTot = (ag) => ag.schedule.slice(0, viewMode === '7J' ? 7 : 14).reduce((s, h) => s + h, 0);
                     return getTot(b) - getTot(a);
                 });
 
@@ -345,12 +408,11 @@
                                 <div className="bg-indigo-600 text-white w-8 h-8 rounded-lg flex items-center justify-center font-black">C</div>
                                 <div className="leading-tight">
                                     <h1 className="text-sm font-black text-slate-900 uppercase tracking-wide">CapsoTime</h1>
-                                    <span className="text-[10px] font-bold text-indigo-600 uppercase">Radar Elite</span>
                                 </div>
                             </div>
                             <div className="bg-slate-100 p-1 rounded-lg flex font-bold text-[10px] shadow-inner border border-slate-200">
-                                <button onClick={() => setViewMode('7J')} className={`px-3 py-1.5 rounded-md transition-all ${viewMode==='7J' ? 'bg-white shadow text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}>7 JOURS</button>
-                                <button onClick={() => setViewMode('14J')} className={`px-3 py-1.5 rounded-md transition-all ${viewMode==='14J' ? 'bg-white shadow text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}>14 JOURS</button>
+                                <button onClick={() => setViewMode('7J')} className={`px-3 py-1.5 rounded-md transition-all ${viewMode === '7J' ? 'bg-white shadow text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}>7 JOURS</button>
+                                <button onClick={() => setViewMode('14J')} className={`px-3 py-1.5 rounded-md transition-all ${viewMode === '14J' ? 'bg-white shadow text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}>14 JOURS</button>
                             </div>
                             <div className="flex gap-2">
                                 <button onClick={() => setModal('PASTE')} className="p-2 bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition"><Icons.Upload /></button>
@@ -385,20 +447,20 @@
 
                         <div className="bg-white px-6 py-4 rounded-2xl shadow-sm border border-slate-200 mb-8 relative">
                             <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4 text-center">Pilotage Temporel ({viewMode})</h3>
-                            <input type="range" min="0" max={viewMode==='7J'?6:13} step="1" value={pivot} onChange={(e) => setPivot(Number(e.target.value))} className="range-slider" />
+                            <input type="range" min="0" max={viewMode === '7J' ? 6 : 13} step="1" value={pivot} onChange={(e) => setPivot(Number(e.target.value))} className="range-slider" />
                             <div className="flex justify-between mt-2 overflow-hidden">
                                 {labels.map((d, i) => (
-                                    <div key={i} className={`flex flex-col items-center transition-all duration-300 ${i===pivot ? 'opacity-100 scale-110' : 'opacity-40 scale-90'}`}>
-                                        <span className={`text-[9px] md:text-[10px] font-bold uppercase ${i===pivot ? 'text-indigo-600' : 'text-slate-500'}`}>{d}</span>
-                                        <div className={`w-1 h-1 rounded-full mt-1 ${i===pivot ? 'bg-indigo-600' : 'bg-transparent'}`}></div>
+                                    <div key={i} className={`flex flex-col items-center transition-all duration-300 ${i === pivot ? 'opacity-100 scale-110' : 'opacity-40 scale-90'}`}>
+                                        <span className={`text-[9px] md:text-[10px] font-bold uppercase ${i === pivot ? 'text-indigo-600' : 'text-slate-500'}`}>{d}</span>
+                                        <div className={`w-1 h-1 rounded-full mt-1 ${i === pivot ? 'bg-indigo-600' : 'bg-transparent'}`}></div>
                                     </div>
                                 ))}
                             </div>
                         </div>
 
                         <div className="flex flex-wrap gap-2 mb-4">
-                            {[{k:'ALL', l:'TOUS', c:'bg-white text-slate-600 border-slate-200'}, {k:'GREEN', l:'VERT', c:'bg-emerald-500 text-white border-emerald-600'}, {k:'ORANGE', l:'ORANGE', c:'bg-orange-500 text-white border-orange-600'}, {k:'RED', l:'ROUGE', c:'bg-rose-600 text-white border-rose-700'}].map(f => (
-                                <button key={f.k} onClick={() => setFilter(f.k)} className={`px-4 py-1.5 rounded-full text-[10px] font-bold uppercase transition border ${filter===f.k ? 'ring-2 ring-offset-1 ring-indigo-500 ' + f.c : 'hover:opacity-80 ' + f.c} ${filter===f.k ? 'shadow-sm' : 'opacity-60 grayscale'}`}>{f.l}</button>
+                            {[{ k: 'ALL', l: 'TOUS', c: 'bg-white text-slate-600 border-slate-200' }, { k: 'GREEN', l: 'VERT', c: 'bg-emerald-500 text-white border-emerald-600' }, { k: 'ORANGE', l: 'ORANGE', c: 'bg-orange-500 text-white border-orange-600' }, { k: 'RED', l: 'ROUGE', c: 'bg-rose-600 text-white border-rose-700' }].map(f => (
+                                <button key={f.k} onClick={() => setFilter(f.k)} className={`px-4 py-1.5 rounded-full text-[10px] font-bold uppercase transition border ${filter === f.k ? 'ring-2 ring-offset-1 ring-indigo-500 ' + f.c : 'hover:opacity-80 ' + f.c} ${filter === f.k ? 'shadow-sm' : 'opacity-60 grayscale'}`}>{f.l}</button>
                             ))}
                         </div>
 
@@ -415,7 +477,7 @@
                             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 fade-in">
                                 <h3 className="font-bold text-lg mb-2">Importer Données</h3>
                                 <p className="text-xs text-slate-500 mb-4">Vous pouvez coller du texte Excel ou importer un fichier PDF.</p>
-                                
+
                                 <div className="mb-4">
                                     <label className="block w-full border-2 border-dashed border-slate-300 rounded-xl p-4 text-center cursor-pointer hover:bg-slate-50 hover:border-indigo-400 transition group">
                                         <div className="flex flex-col items-center gap-2">
@@ -443,6 +505,5 @@
         root.render(<App />);
     </script>
 </body>
-</html>
 
-```
+</html>
