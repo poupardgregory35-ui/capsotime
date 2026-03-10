@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CapsoTime - V6.0 Seuils CCN 51</title>
+    <title>CapsoTime</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
@@ -260,13 +260,26 @@
             const final = agent.schedule.map((v, i) => i <= pivot ? v : agent.tactical[i]);
             const stats = Utils.analyze(final, viewMode, config);
 
+            // --- LOGIQUE RADAR LMM (J0 + J1 + J2) ---
+            const cumulLMM = agent.schedule[0] + agent.schedule[1] + agent.schedule[2];
+            const radarStatus = cumulLMM > 27 ? 'RED' : cumulLMM > 24 ? 'ORANGE' : 'GREEN';
+            const showRadar = pivot <= 2;
+
+            const radarColor =
+                radarStatus === 'RED' ? 'bg-red-500 text-white shadow-sm' :
+                    radarStatus === 'ORANGE' ? 'bg-orange-400 text-white shadow-sm' :
+                        'bg-green-100 text-green-700';
+
+            const radarLabel =
+                radarStatus === 'RED' ? '🔴' :
+                    radarStatus === 'ORANGE' ? '🟠' :
+                        '🟢';
+
             const designs = {
                 GREEN: { border: 'border-slate-200', bg: 'bg-white', title: 'text-slate-700', badge: 'bg-green-500 text-white shadow-md', bar: 'bg-emerald-500', totalColor: 'text-green-500' },
                 ORANGE: { border: 'border-orange-200', bg: 'bg-orange-50/30', title: 'text-orange-900', badge: 'bg-orange-500 text-white shadow-md', bar: 'bg-orange-400', totalColor: 'text-orange-500' },
                 RED: { border: 'border-rose-200', bg: 'bg-rose-50/30', title: 'text-rose-900', badge: 'bg-red-500 text-white shadow-md', bar: 'bg-rose-500', totalColor: 'text-red-500' }
             }[stats.status];
-
-            const statusLabel = { GREEN: 'VERT', ORANGE: 'ORANGE', RED: 'ROUGE' }[stats.status];
 
             return (
                 <div className={`p-4 rounded-xl border mb-3 flex flex-col lg:flex-row items-center gap-4 transition-all hover:shadow-lg ${designs.border} ${designs.bg}`}>
@@ -274,7 +287,20 @@
                         <div className={`w-1.5 h-12 rounded-full ${designs.bar}`}></div>
                         <div className="flex-1 min-w-0">
                             <h3 className={`font-bold text-sm truncate ${designs.title}`}>{agent.name}</h3>
-                            <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${designs.badge}`}>{statusLabel}</span>
+                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                {showRadar ? (
+                                    <span
+                                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-black ${radarColor}`}
+                                        title={`Cumul LMM : ${Utils.fmtHours(cumulLMM)}`}
+                                    >
+                                        {radarLabel} {Utils.fmtHours(cumulLMM)}
+                                    </span>
+                                ) : (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-black bg-slate-100 text-slate-400" title="Radar inactif au délà du Mercredi">
+                                        LMM figé
+                                    </span>
+                                )}
+                            </div>
                         </div>
                     </div>
                     <div className={`flex-1 w-full ${viewMode === '7J' ? 'grid-7' : 'grid-14'}`}>
@@ -447,14 +473,16 @@
 
             return (
                 <div className="pb-20">
+                    <div className="fixed left-0 top-14 z-40">
+                        <img
+                            src="capsotime.png"
+                            alt="CapsoTime"
+                            className="h-80 w-auto object-contain"
+                        />
+                    </div>
                     <div className="glass-header sticky top-0 z-50">
                         <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
-                            <div className="flex items-center gap-3">
-                                <div className="bg-indigo-600 text-white w-8 h-8 rounded-lg flex items-center justify-center font-black">C</div>
-                                <div className="leading-tight">
-                                    <h1 className="text-sm font-black text-slate-900 uppercase tracking-wide">CapsoTime</h1>
-                                </div>
-                            </div>
+
                             <div className="bg-slate-100 p-1 rounded-lg flex font-bold text-[10px] shadow-inner border border-slate-200">
                                 <button onClick={() => setViewMode('7J')} className={`px-3 py-1.5 rounded-md transition-all ${viewMode === '7J' ? 'bg-white shadow text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}>7 JOURS</button>
                                 <button onClick={() => setViewMode('14J')} className={`px-3 py-1.5 rounded-md transition-all ${viewMode === '14J' ? 'bg-white shadow text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}>14 JOURS</button>
